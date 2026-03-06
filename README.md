@@ -1,0 +1,219 @@
+# Plant Water Advisor Bot (Telegram MVP)
+
+MVP Telegram bot that estimates plant watering needs from a photo using a **two-step AI pipeline**:
+1) visual analysis model → `VisionOutput` JSON
+2) reasoning/validation model → `RecommendationOutput` JSON
+
+The bot is conservative, uncertainty-aware, and designed to swap providers later.
+
+---
+
+## 1) System architecture
+
+```text
+Telegram User
+   -> Telegram Bot API (getUpdates)
+   -> Bot Handler
+      -> Image Download Service (best photo resolution)
+      -> Vision Provider (image -> VisionOutput)
+      -> JSON Normalization/Validation (zod)
+      -> Reasoning Provider (VisionOutput -> RecommendationOutput)
+      -> Response Formatter
+   -> Telegram sendMessage
+```
+
+Design goals:
+- modular provider abstraction
+- strict schema contracts between stages
+- safety-first recommendations
+- mock mode for local runs without AI keys
+
+---
+
+## 2) Folder structure
+
+```text
+src/
+  bot/
+    telegramBot.ts
+  config/
+    env.ts
+  formatters/
+    telegramFormatter.ts
+  prompts/
+    visionPrompt.ts
+    reasoningPrompt.ts
+  providers/
+    interfaces.ts
+    factory.ts
+    mockProviders.ts
+    openaiProviders.ts
+  schemas/
+    contracts.ts
+  services/
+    telegramClient.ts
+    imageService.ts
+    pipeline.ts
+  types/
+    telegram.ts
+  index.ts
+```
+
+---
+
+## 3) JSON schemas / TypeScript types
+
+Implemented in `src/schemas/contracts.ts` with `zod`:
+- `VisionOutputSchema`
+- `RecommendationOutputSchema`
+
+Type-safe exports:
+- `type VisionOutput`
+- `type RecommendationOutput`
+
+All model outputs are validated before use.
+
+---
+
+## 4) Telegram bot flow
+
+1. Poll updates from Telegram API
+2. If message has no image:
+   - send guidance asking user to upload a plant photo
+3. If image exists:
+   - acknowledge receipt
+   - pick highest-resolution photo size
+   - download image from Telegram file API
+   - run two-step pipeline
+   - format and send structured advice
+4. If analysis fails or is low-confidence:
+   - return cautious uncertainty message + follow-up questions
+
+---
+
+## 5) Provider abstraction design
+
+Interfaces (`src/providers/interfaces.ts`):
+- `VisionProvider.analyzeImage(image: Buffer): Promise<VisionOutput>`
+- `ReasoningProvider.recommend(input: VisionOutput): Promise<RecommendationOutput>`
+
+Current implementations:
+- `mockProviders.ts` (fully local)
+- `openaiProviders.ts` (starter adapter)
+
+Provider selection:
+- `src/providers/factory.ts`
+- controlled by `MOCK_MODE` and `AI_PROVIDER`
+
+---
+
+## 6) Implementation plan
+
+### Phase 1 (done in this MVP scaffold)
+- Telegram polling handler
+- image retrieval + best-resolution selection
+- two-step provider pipeline
+- strict JSON contracts with zod
+- safe Telegram formatter
+- mock mode support
+
+### Phase 2
+- fully wire vision model image input in chosen AI provider
+- improve low-quality detection (blur/lighting heuristics)
+- add retry policy and rate-limit handling
+
+### Phase 3
+- persistence (SQLite/Postgres) for user/session history
+- reminders and follow-up scheduling
+- species-aware logic tuning
+
+---
+
+## 7) Starter code status
+
+Included and runnable locally with mock mode:
+- bot handler
+- providers abstraction + mock providers
+- pipeline with schema validation
+- Telegram response formatter
+
+---
+
+## 8) Sample prompts
+
+See:
+- `src/prompts/visionPrompt.ts`
+- `src/prompts/reasoningPrompt.ts`
+
+Prompt policy highlights:
+- vision model: visually inferable facts only
+- reasoning model: use only VisionOutput JSON
+- conservative + uncertainty-forward outputs
+
+---
+
+## 9) Local development instructions
+
+### Prereqs
+- Node.js 20+
+- Telegram bot token from BotFather
+
+### Run
+```bash
+npm install
+cp .env.example .env
+# put TELEGRAM_BOT_TOKEN in .env
+npm run dev
+```
+
+Then send a photo to your bot in Telegram.
+
+---
+
+## 10) Example `.env`
+
+See `.env.example`:
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_BASE_URL=https://api.telegram.org
+POLL_INTERVAL_MS=2500
+MOCK_MODE=true
+AI_PROVIDER=mock
+OPENAI_API_KEY=
+VISION_MODEL=gpt-4.1-mini
+REASONING_MODEL=gpt-4.1-mini
+```
+
+---
+
+## 11) Mock mode behavior
+
+When `MOCK_MODE=true` (or `AI_PROVIDER=mock`):
+- no external AI key required
+- vision stage returns realistic synthetic `VisionOutput`
+- reasoning stage returns conservative `RecommendationOutput`
+- full bot flow is testable end-to-end
+
+---
+
+## 12) Future roadmap
+
+- user profile memory (species, pot size, watering cadence)
+- multi-plant history per Telegram user
+- weather/humidity enrichment
+- follow-up reminders
+- broader care advice (light, repotting, nutrients)
+- image history trend tracking
+
+---
+
+## Safety & product behavior notes
+
+- Avoid exact watering volume unless confidence is high
+- Prefer cautious guidance when uncertain
+- Explicitly separate:
+  - observations
+  - recommendation
+  - uncertainty/safety notes
+- Keep a clear disclaimer in every response
