@@ -39,7 +39,12 @@ async function handleMessage(msg: TelegramMessage, advisor: WateringAdvisorServi
     const qualityIssues = basicImageQualityChecks(best);
     const image = await fetchBestTelegramPhoto(msg.photo);
 
-    const { vision: v, recommendation: r } = await advisor.analyzePlantImage(image);
+    const { vision: v, recommendation: r } = await advisor.analyzePlantImage({
+      image,
+      platform: "telegram",
+      userId: String(chatId),
+      imageMeta: { width: best.width, height: best.height, fileSize: best.file_size }
+    });
 
     const lowConfidence = v.overall_confidence < 0.45 || r.confidence < 0.45;
     const uncertaintyPrefix = lowConfidence

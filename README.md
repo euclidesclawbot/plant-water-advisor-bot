@@ -6,6 +6,10 @@ MVP Telegram bot that estimates plant watering needs from a photo using a **two-
 
 The bot is conservative, uncertainty-aware, and designed to swap providers later.
 
+Persistence strategy:
+- **Firebase Firestore is the primary database** for production/client-ready flows.
+- In `MOCK_MODE`, an in-memory repository is used for local development convenience.
+
 ---
 
 ## 1) System architecture
@@ -39,6 +43,7 @@ Telegram User
    -> Telegram Adapter
       -> Image Download Service (best photo resolution)
       -> Core WateringAdvisorService
+      -> Analysis Repository (Firestore)
       -> Response Formatter
    -> Telegram sendMessage
 ```
@@ -65,6 +70,8 @@ src/
     env.ts
   core/
     wateringAdvisorService.ts
+  firebase/
+    admin.ts
   formatters/
     telegramFormatter.ts
   prompts/
@@ -75,6 +82,11 @@ src/
     factory.ts
     mockProviders.ts
     openaiProviders.ts
+  repositories/
+    interfaces.ts
+    factory.ts
+    firebaseAnalysisRepository.ts
+    memoryAnalysisRepository.ts
   schemas/
     contracts.ts
   services/
@@ -200,11 +212,16 @@ Prompt policy highlights:
 ```bash
 npm install
 cp .env.example .env
-# put TELEGRAM_BOT_TOKEN in .env
+# set TELEGRAM_BOT_TOKEN
+# for production mode also set Firebase credentials in env
 npm run dev
 ```
 
 Then send a photo to your bot in Telegram.
+
+### Firestore usage
+- Production path: analysis records are stored in `plant_analyses` collection.
+- Local/mock path (`MOCK_MODE=true`): in-memory storage only.
 
 ---
 
