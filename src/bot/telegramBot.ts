@@ -1,11 +1,10 @@
 import { formatAdvice, TEXT_ONLY_HELP } from "../formatters/telegramFormatter.js";
-import type { ReasoningProvider, VisionProvider } from "../providers/interfaces.js";
+import { WateringAdvisorService } from "../core/wateringAdvisorService.js";
 import { basicImageQualityChecks, fetchBestTelegramPhoto, pickBestPhoto } from "../services/imageService.js";
-import { runAnalysisPipeline } from "../services/pipeline.js";
 import { getUpdates, sendMessage } from "../services/telegramClient.js";
 import type { TelegramMessage } from "../types/telegram.js";
 
-export async function runTelegramBot(vision: VisionProvider, reasoning: ReasoningProvider, pollMs: number): Promise<void> {
+export async function runTelegramBot(advisor: WateringAdvisorService, pollMs: number): Promise<void> {
   let offset = 0;
   console.log("Bot started (polling mode)");
 
@@ -15,7 +14,7 @@ export async function runTelegramBot(vision: VisionProvider, reasoning: Reasonin
       for (const u of updates) {
         offset = Math.max(offset, u.update_id + 1);
         if (!u.message) continue;
-        await handleMessage(u.message, vision, reasoning);
+        await handleMessage(u.message, advisor);
       }
     } catch (err) {
       console.error("Polling error:", err);
@@ -25,7 +24,7 @@ export async function runTelegramBot(vision: VisionProvider, reasoning: Reasonin
   }
 }
 
-async function handleMessage(msg: TelegramMessage, vision: VisionProvider, reasoning: ReasoningProvider): Promise<void> {
+async function handleMessage(msg: TelegramMessage, advisor: WateringAdvisorService): Promise<void> {
   const chatId = msg.chat.id;
 
   if (!msg.photo?.length) {
@@ -40,7 +39,7 @@ async function handleMessage(msg: TelegramMessage, vision: VisionProvider, reaso
     const qualityIssues = basicImageQualityChecks(best);
     const image = await fetchBestTelegramPhoto(msg.photo);
 
-    const { vision: v, recommendation: r } = await runAnalysisPipeline(image, vision, reasoning);
+    const { vision: v, recommendation: r } = await advisor.analyzePlantImage(image);
 
     const lowConfidence = v.overall_confidence < 0.45 || r.confidence < 0.45;
     const uncertaintyPrefix = lowConfidence

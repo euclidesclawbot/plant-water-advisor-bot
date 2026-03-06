@@ -9,46 +9,92 @@ import {
 } from "../schemas/contracts.js";
 import type { ReasoningProvider, VisionProvider } from "./interfaces.js";
 
-const OPENAI_URL = "https://api.openai.com/v1/responses";
+function extractOutputText(json: any): string {
+  if (typeof json?.output_text === "string" && json.output_text.trim()) return json.output_text;
 
-async function callOpenAI(prompt: string, model: string): Promise<unknown> {
+  const output = json?.output;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (Array.isArray(item?.content)) {
+        for (const c of item.content) {
+          if (c?.type === "output_text" && typeof c?.text === "string") {
+            return c.text;
+          }
+        }
+      }
+    }
+  }
+
+  throw new Error("OpenAI response did not contain output text");
+}
+
+async function postOpenAI(body: unknown): Promise<any> {
   if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
 
-  const res = await fetch(OPENAI_URL, {
+  const res = await fetch(env.OPENAI_BASE_URL, {
     method: "POST",
     headers: {
       authorization: `Bearer ${env.OPENAI_API_KEY}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({ model, input: prompt })
+    body: JSON.stringify(body)
   });
 
-  if (!res.ok) throw new Error(`OpenAI failed: ${res.status} ${await res.text()}`);
-  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(`OpenAI failed: ${res.status} ${await res.text()}`);
+  }
 
-  const text = json.output_text as string | undefined;
-  if (!text) throw new Error("OpenAI output_text missing");
-  return JSON.parse(text);
+  return res.json();
 }
 
 export class OpenAIVisionProvider implements VisionProvider {
-  async analyzeImage(_image: Buffer): Promise<VisionOutput> {
-    // MVP note: image attachment wiring differs by provider capabilities.
-    // This starter sends prompt-only and expects provider-side extension.
-    const payload = await callOpenAI(
-      `${VISION_SYSTEM_PROMPT}\nReturn JSON only for VisionOutput.`,
-      env.VISION_MODEL
-    );
+  async analyzeImage(image: Buffer): Promise<VisionOutput> {
+    const imageDataUrl = `data:image/jpeg;base64,${image.toString("base64")}`;
+
+    const json = await postOpenAI({
+      model: env.VISION_MODEL,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: VISION_SYSTEM_PROMPT }]
+        },
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: "Analyze this plant image and return strict VisionOutput JSON only." },
+            { type: "input_image", image_url: imageDataUrl }
+          ]
+        }
+      ]
+    });
+
+    const payload = JSON.parse(extractOutputText(json));
     return VisionOutputSchema.parse(payload);
   }
 }
 
 export class OpenAIReasoningProvider implements ReasoningProvider {
   async recommend(input: VisionOutput): Promise<RecommendationOutput> {
-    const payload = await callOpenAI(
-      `${REASONING_SYSTEM_PROMPT}\nInput VisionOutput JSON:\n${JSON.stringify(input)}\nReturn JSON only for RecommendationOutput.`,
-      env.REASONING_MODEL
-    );
+    const json = await postOpenAI({
+      model: env.REASONING_MODEL,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: REASONING_SYSTEM_PROMPT }]
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `Use this VisionOutput JSON and return strict RecommendationOutput JSON only:\n${JSON.stringify(input)}`
+            }
+          ]
+        }
+      ]
+    });
+
+    const payload = JSON.parse(extractOutputText(json));
     return RecommendationOutputSchema.parse(payload);
   }
 }

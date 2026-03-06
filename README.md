@@ -11,13 +11,34 @@ The bot is conservative, uncertainty-aware, and designed to swap providers later
 ## 1) System architecture
 
 ```text
+                +-----------------------------+
+                | Core Application Layer      |
+                | WateringAdvisorService      |
+                | (pipeline + contracts)      |
+                +-------------+---------------+
+                              |
+                 +------------+------------+
+                 |                         |
+        +--------v--------+       +--------v--------+
+        | Vision Provider |       | Reasoning       |
+        | (swappable)     |       | Provider        |
+        +-----------------+       +-----------------+
+
+Transport Adapters (modular):
+- Telegram Bot adapter (implemented)
+- HTTP/Web adapter (placeholder)
+- Mobile backend adapter (placeholder)
+
+Auth Layer (future clients):
+- Firebase-based auth provider abstraction
+- Supports provider login flows (Google now, extensible later)
+
+Current runtime path:
 Telegram User
    -> Telegram Bot API (getUpdates)
-   -> Bot Handler
+   -> Telegram Adapter
       -> Image Download Service (best photo resolution)
-      -> Vision Provider (image -> VisionOutput)
-      -> JSON Normalization/Validation (zod)
-      -> Reasoning Provider (VisionOutput -> RecommendationOutput)
+      -> Core WateringAdvisorService
       -> Response Formatter
    -> Telegram sendMessage
 ```
@@ -27,6 +48,7 @@ Design goals:
 - strict schema contracts between stages
 - safety-first recommendations
 - mock mode for local runs without AI keys
+- client-agnostic core to support future web/mobile apps
 
 ---
 
@@ -34,10 +56,15 @@ Design goals:
 
 ```text
 src/
+  auth/
+    interfaces.ts
+    firebaseAuthProvider.ts
   bot/
     telegramBot.ts
   config/
     env.ts
+  core/
+    wateringAdvisorService.ts
   formatters/
     telegramFormatter.ts
   prompts/
@@ -54,6 +81,11 @@ src/
     telegramClient.ts
     imageService.ts
     pipeline.ts
+  transports/
+    http/
+      httpApiPlaceholder.ts
+    mobile/
+    telegram/
   types/
     telegram.ts
   index.ts
@@ -105,6 +137,12 @@ Provider selection:
 - `src/providers/factory.ts`
 - controlled by `MOCK_MODE` and `AI_PROVIDER`
 
+Auth abstraction for future clients:
+- `src/auth/interfaces.ts`
+- `src/auth/firebaseAuthProvider.ts`
+
+This keeps identity concerns separate from Telegram transport and ready for future web/app clients with Firebase + Google sign-in.
+
 ---
 
 ## 6) Implementation plan
@@ -118,7 +156,7 @@ Provider selection:
 - mock mode support
 
 ### Phase 2
-- fully wire vision model image input in chosen AI provider
+- harden OpenAI provider behavior (timeouts, retries, response-format strictness)
 - improve low-quality detection (blur/lighting heuristics)
 - add retry policy and rate-limit handling
 
@@ -181,8 +219,14 @@ POLL_INTERVAL_MS=2500
 MOCK_MODE=true
 AI_PROVIDER=mock
 OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.openai.com/v1/responses
 VISION_MODEL=gpt-4.1-mini
 REASONING_MODEL=gpt-4.1-mini
+
+# Future web/mobile auth
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
 ```
 
 ---
