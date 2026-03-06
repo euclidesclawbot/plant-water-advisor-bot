@@ -30,7 +30,7 @@ Persistence strategy:
 
 Transport Adapters (modular):
 - Telegram Bot adapter (implemented)
-- HTTP/Web adapter (placeholder)
+- HTTP/Web adapter (implemented MVP endpoint)
 - Mobile backend adapter (placeholder)
 
 Auth Layer (future clients):
@@ -97,6 +97,7 @@ src/
   transports/
     http/
       httpApiPlaceholder.ts
+      server.ts
     mobile/
     telegram/
   types/
@@ -221,6 +222,24 @@ npm run dev
 ```
 
 Then send a photo to your bot in Telegram.
+
+### HTTP API (protected)
+When `RUN_HTTP_API=true`, server exposes:
+- `GET /health`
+- `POST /v1/analyze` (requires Firebase ID token)
+
+Request:
+```json
+{
+  "image_base64": "..."
+}
+```
+
+Headers:
+```text
+Authorization: Bearer <firebase_id_token>
+Content-Type: application/json
+```
 
 ### Firestore usage
 - Production path: analysis records are stored in `plant_analyses` collection.
