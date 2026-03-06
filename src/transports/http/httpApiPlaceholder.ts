@@ -1,10 +1,11 @@
-import type { WateringAdvisorService } from "../../core/wateringAdvisorService.js";
 import type { AuthProvider } from "../../auth/interfaces.js";
+import type { WateringAdvisorService } from "../../core/wateringAdvisorService.js";
 
 /**
  * Future transport adapter (web/mobile clients).
  *
- * This placeholder shows where REST handlers + auth middleware will live.
+ * This module now includes reusable auth verification helpers,
+ * ready to be used by an HTTP framework (Fastify/Express) route layer.
  */
 export class HttpApiPlaceholder {
   constructor(
@@ -12,6 +13,16 @@ export class HttpApiPlaceholder {
     private readonly authProvider: AuthProvider
   ) {
     void this.advisor;
-    void this.authProvider;
+  }
+
+  async verifyBearerToken(authorizationHeader?: string) {
+    if (!authorizationHeader?.startsWith("Bearer ")) {
+      throw new Error("Missing Bearer token");
+    }
+
+    const token = authorizationHeader.slice("Bearer ".length).trim();
+    if (!token) throw new Error("Empty Bearer token");
+
+    return this.authProvider.verifyIdToken(token);
   }
 }

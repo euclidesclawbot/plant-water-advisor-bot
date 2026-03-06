@@ -63,6 +63,7 @@ Design goals:
 src/
   auth/
     interfaces.ts
+    factory.ts
     firebaseAuthProvider.ts
   bot/
     telegramBot.ts
@@ -151,7 +152,9 @@ Provider selection:
 
 Auth abstraction for future clients:
 - `src/auth/interfaces.ts`
+- `src/auth/factory.ts`
 - `src/auth/firebaseAuthProvider.ts`
+- `src/transports/http/httpApiPlaceholder.ts` (Bearer verification helper)
 
 This keeps identity concerns separate from Telegram transport and ready for future web/app clients with Firebase + Google sign-in.
 
@@ -257,6 +260,27 @@ When `MOCK_MODE=true` (or `AI_PROVIDER=mock`):
 - full bot flow is testable end-to-end
 
 ---
+
+## Firebase sign-in (implemented server verification)
+
+Current status:
+- Backend can verify Firebase ID tokens via `FirebaseAuthProvider`.
+- This is ready for Google sign-in tokens issued by Firebase Auth on web/mobile clients.
+
+How it works:
+1. Client signs in with Firebase Auth (Google provider).
+2. Client gets Firebase ID token.
+3. Client sends `Authorization: Bearer <idToken>` to backend.
+4. Backend verifies token with Firebase Admin and gets `uid/email/provider`.
+
+Required env for non-mock auth:
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
+
+Note:
+- Telegram flow itself does not require this login step.
+- Web/mobile APIs will use this immediately when route layer is added.
 
 ## 12) Future roadmap
 

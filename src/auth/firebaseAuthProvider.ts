@@ -1,14 +1,25 @@
+import { getAuth } from "firebase-admin/auth";
+import { getFirebaseDb } from "../firebase/admin.js";
 import type { AuthProvider, AuthUser } from "./interfaces.js";
 
 /**
- * Future-ready Firebase Auth provider.
+ * Firebase Auth provider.
  *
- * For MVP Telegram flow this is not required yet, but this module is ready
- * to be used by future web/mobile clients where users sign in with providers
- * like Google.
+ * Verifies Firebase ID tokens issued by client sign-in flows
+ * (e.g., Google provider via Firebase Auth on web/mobile).
  */
 export class FirebaseAuthProvider implements AuthProvider {
-  async verifyIdToken(_idToken: string): Promise<AuthUser> {
-    throw new Error("Firebase auth verification not wired yet. Add firebase-admin and credentials.");
+  async verifyIdToken(idToken: string): Promise<AuthUser> {
+    // Ensures Firebase app is initialized through shared bootstrap.
+    getFirebaseDb();
+
+    const decoded = await getAuth().verifyIdToken(idToken);
+    const provider = decoded.firebase?.sign_in_provider;
+
+    return {
+      uid: decoded.uid,
+      email: decoded.email,
+      provider
+    };
   }
 }
